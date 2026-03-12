@@ -7,21 +7,21 @@ export function QueueScreen() {
   return (
     <div className="flex-1 bg-teal-50/30 flex flex-col h-full relative">
       {/* Header */}
-      <header className="flex items-center gap-4 p-4 border-b border-teal-100 bg-white sticky top-0 z-10 shadow-sm">
+      <header className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-b border-teal-100 bg-white sticky top-0 z-10 shadow-sm">
         <button 
           onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-teal-50 active:bg-teal-100 transition-colors"
+          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-teal-50 active:bg-teal-100 transition-colors flex-shrink-0 min-w-[40px] min-h-[40px]"
         >
           <ChevronLeft className="w-6 h-6 text-teal-700" />
         </button>
-        <h1 className="text-lg font-bold text-gray-900 flex-1">Live Appointment Status</h1>
+        <h1 className="text-base sm:text-lg font-bold text-gray-900 flex-1 truncate">Live Appointment Status</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 flex flex-col">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8 flex flex-col">
         
         {/* Centerpiece: Circular Progress */}
-        <div className="flex flex-col items-center justify-center mt-4">
-          <div className="relative w-56 h-56 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center mt-2 sm:mt-4">
+          <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex items-center justify-center">
             {/* Glow effect */}
             <div className="absolute inset-0 rounded-full bg-teal-400/20 blur-2xl"></div>
             
@@ -35,25 +35,25 @@ export function QueueScreen() {
               />
             </svg>
             <div className="absolute flex flex-col items-center text-center z-20">
-              <span className="text-xs font-bold text-teal-600 uppercase tracking-widest mb-1">Queue Number</span>
-              <span className="text-5xl font-extrabold text-gray-900 tracking-tight">#14</span>
+              <span className="text-[10px] sm:text-xs font-bold text-teal-600 uppercase tracking-widest mb-1">Queue Number</span>
+              <span className="text-4xl sm:text-5xl font-extrabold text-gray-900 tracking-tight">#14</span>
             </div>
           </div>
         </div>
 
         {/* Status Text */}
         <div className="text-center space-y-2">
-          <p className="text-xl font-bold text-gray-900">Doctor is seeing Token <span className="text-blue-600">#11</span></p>
-          <p className="text-gray-600 font-medium">Estimated wait: <span className="text-teal-700 font-bold bg-teal-50 px-2 py-1 rounded-md">25 mins</span></p>
+          <p className="text-lg sm:text-xl font-bold text-gray-900">Doctor is seeing Token <span className="text-blue-600">#11</span></p>
+          <p className="text-sm sm:text-base text-gray-600 font-medium">Estimated wait: <span className="text-teal-700 font-bold bg-teal-50 px-2 py-1 rounded-md">25 mins</span></p>
         </div>
 
         {/* Alert Box */}
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm flex gap-3 relative overflow-hidden">
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 sm:p-4 shadow-sm flex gap-3 relative overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-orange-400 to-red-500"></div>
-          <AlertTriangle className="w-6 h-6 text-orange-600 flex-shrink-0 mt-0.5 ml-1" />
-          <div>
+          <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 flex-shrink-0 mt-0.5 ml-2" />
+          <div className="min-w-0">
             <span className="text-[10px] uppercase font-bold text-orange-600 tracking-wider bg-white/50 px-1.5 py-0.5 rounded">AI Insight</span>
-            <p className="text-sm font-medium text-orange-900 mt-1.5 leading-snug">
+            <p className="text-xs sm:text-sm font-medium text-orange-900 mt-1.5 leading-snug">
               AI predicts a 15-minute delay. You should leave for the clinic in 10 minutes.
             </p>
           </div>
@@ -65,15 +65,15 @@ export function QueueScreen() {
         <div className="space-y-3 pb-4">
           <button 
             disabled
-            className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-400 border border-gray-200 font-bold py-3.5 rounded-xl cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-400 border border-gray-200 font-bold py-3 sm:py-3.5 rounded-xl cursor-not-allowed text-sm sm:text-base min-h-[44px]"
           >
-            <FileText className="w-5 h-5" />
-            View Digital Prescription
+            <FileText className="w-5 h-5 flex-shrink-0" />
+            <span className="truncate">View Digital Prescription</span>
           </button>
           
-          <button className="w-full flex items-center justify-center gap-2 bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 font-bold py-3.5 rounded-xl transition-colors active:scale-[0.98] shadow-sm">
-            <XCircle className="w-5 h-5" />
-            Cancel / Reschedule
+          <button className="w-full flex items-center justify-center gap-2 bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 font-bold py-3 sm:py-3.5 rounded-xl transition-colors active:scale-[0.98] shadow-sm text-sm sm:text-base min-h-[44px]">
+            <XCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="truncate">Cancel / Reschedule</span>
           </button>
         </div>
 
