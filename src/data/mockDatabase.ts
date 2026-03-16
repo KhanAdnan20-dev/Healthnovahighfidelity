@@ -168,7 +168,7 @@ export const db = {
 // ─── Simulated Async API (mimics FastAPI network latency) ───
 
 function simulateLatency<T>(data: T, ms?: number): Promise<T> {
-  const delay = ms ?? 800 + Math.random() * 700; // 800–1500 ms
+  const delay = ms ?? (800 + Math.random() * 700); // 800–1500 ms
   return new Promise((resolve) => setTimeout(() => resolve(data), delay));
 }
 

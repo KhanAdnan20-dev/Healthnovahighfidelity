@@ -35,7 +35,7 @@ export function QueueScreen() {
   const queueNumber = appointment?.queueNumber ?? 14;
   const currentToken = 11;
   const totalInQueue = queueNumber - currentToken + 1;
-  const progress = ((queueNumber - currentToken) / totalInQueue);
+  const progress = (queueNumber - currentToken) / totalInQueue;
   const circumference = 2 * Math.PI * 45; // ~283
   const dashOffset = circumference * (1 - (1 - progress));
 

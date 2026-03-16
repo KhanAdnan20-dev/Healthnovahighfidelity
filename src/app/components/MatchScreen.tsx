@@ -88,7 +88,7 @@ function DoctorCard({
   onBook: () => void;
 }) {
   const { name, specialty, reviews, distance, nextSlot, avatarColor } = doctor;
-  const initial = name.includes(" ") ? name.split(" ")[1][0] : name[0];
+  const initial = (name.includes(" ") ? name.split(" ")[1]?.[0] : name[0]) ?? "?";
 
   return (
     <div className="bg-white border border-teal-100/60 rounded-2xl p-4 shadow-sm flex flex-col gap-4 hover:shadow-md transition-shadow">
