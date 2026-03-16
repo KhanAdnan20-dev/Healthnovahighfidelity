@@ -1,8 +1,29 @@
-import { Bell, MapPin, ChevronDown, Calendar, FolderHeart, Users, Pill, Clock, Activity, Search, Home, User, BookOpen } from "lucide-react";
+import { Bell, MapPin, ChevronDown, Calendar, FolderHeart, Users, Pill, Clock, Activity, Search, Home, User, BookOpen, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { api, type Appointment, type Doctor, db } from "@/data/mockDatabase";
 
 export function HomeScreen() {
   const navigate = useNavigate();
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showClinicDropdown, setShowClinicDropdown] = useState(false);
+  const [selectedClinic, setSelectedClinic] = useState("Downtown Clinic");
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const clinics = [...new Set(db.doctors.map((d) => d.clinic))];
+
+  useEffect(() => {
+    api.getActiveAppointment().then(async (appt) => {
+      if (appt) {
+        setAppointment(appt);
+        const doc = await api.getDoctorById(appt.doctorId);
+        setDoctor(doc ?? null);
+      }
+      setLoading(false);
+    });
+  }, []);
 
   return (
     <div className="flex-1 bg-gray-50 flex flex-col relative h-full">
@@ -15,22 +36,58 @@ export function HomeScreen() {
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-700 tracking-tight">HealthNova</span>
-            <div className="flex items-center gap-1 cursor-pointer mt-[-2px]">
+            <div className="flex items-center gap-1 cursor-pointer mt-[-2px] relative" onClick={() => setShowClinicDropdown(!showClinicDropdown)}>
               <MapPin className="w-3 h-3 text-teal-600" />
-              <span className="text-xs text-gray-500 font-medium">Downtown Clinic</span>
-              <ChevronDown className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-500 font-medium">{selectedClinic}</span>
+              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${showClinicDropdown ? 'rotate-180' : ''}`} />
             </div>
           </div>
         </div>
 
         {/* Notification Bell */}
-        <button className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 relative hover:bg-teal-100 transition-colors">
+        <button
+          onClick={() => setShowNotifications(!showNotifications)}
+          className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 relative hover:bg-teal-100 transition-colors"
+        >
           <Bell className="w-5 h-5 text-teal-700" />
           <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-red-500 shadow-sm border border-white"></span>
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 bg-teal-50/30">
+      {/* Clinic Dropdown */}
+      {showClinicDropdown && (
+        <div className="absolute top-[72px] left-4 bg-white border border-teal-100 rounded-xl shadow-lg z-50 w-56 py-1">
+          {clinics.map((c) => (
+            <div
+              key={c}
+              onClick={() => { setSelectedClinic(c); setShowClinicDropdown(false); }}
+              className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors ${c === selectedClinic ? 'font-bold text-teal-700 bg-teal-50' : 'text-gray-700'}`}
+            >
+              {c}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Notifications Panel */}
+      {showNotifications && (
+        <div className="absolute top-[72px] right-4 bg-white border border-teal-100 rounded-xl shadow-lg z-50 w-72 p-4 space-y-3">
+          <h4 className="font-bold text-sm text-gray-800">Notifications</h4>
+          <div className="space-y-2">
+            <div className="p-2.5 bg-teal-50 rounded-lg text-xs text-gray-700 font-medium">
+              <span className="font-bold text-teal-700">Reminder:</span> Appointment with Dr. Sarah Jenkins at 2:45 PM
+            </div>
+            <div className="p-2.5 bg-blue-50 rounded-lg text-xs text-gray-700 font-medium">
+              <span className="font-bold text-blue-700">Lab Result:</span> Your blood work results are ready
+            </div>
+            <div className="p-2.5 bg-gray-50 rounded-lg text-xs text-gray-700 font-medium">
+              <span className="font-bold text-gray-500">System:</span> App updated to latest version
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 bg-teal-50/30" onClick={() => { setShowClinicDropdown(false); setShowNotifications(false); }}>
         
         {/* Hero Section: AI Search */}
         <section className="bg-gradient-to-br from-teal-600 to-blue-700 rounded-3xl p-6 shadow-lg relative overflow-hidden">
@@ -65,40 +122,53 @@ export function HomeScreen() {
               <Activity className="w-4 h-4 text-teal-600" />
               Active Queue Status
             </h3>
-            <span className="text-xs font-bold text-teal-600 cursor-pointer hover:underline">View All</span>
+            <span onClick={() => navigate('/queue')} className="text-xs font-bold text-teal-600 cursor-pointer hover:underline">View All</span>
           </div>
-          <div 
-            onClick={() => navigate('/queue')}
-            className="bg-white border border-teal-100 rounded-2xl p-4 shadow-md relative overflow-hidden cursor-pointer hover:shadow-lg hover:border-teal-200 transition-all group"
-          >
-            {/* Left accent bar */}
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-teal-400 to-blue-500 group-hover:w-2 transition-all"></div>
-            
-            <div className="flex justify-between items-start mb-3 pl-1.5">
-              <div>
-                <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wider bg-teal-50 px-2 py-0.5 rounded-full">Upcoming Appointment</span>
-                <h4 className="font-bold text-gray-900 mt-2 text-lg">Dr. Sarah Jenkins</h4>
-                <p className="text-xs font-medium text-gray-500">General Practice</p>
-              </div>
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 text-teal-600 animate-spin" />
+            </div>
+          ) : appointment && appointment.status !== "cancelled" && doctor ? (
+            <div 
+              onClick={() => navigate('/queue')}
+              className="bg-white border border-teal-100 rounded-2xl p-4 shadow-md relative overflow-hidden cursor-pointer hover:shadow-lg hover:border-teal-200 transition-all group"
+            >
+              {/* Left accent bar */}
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-teal-400 to-blue-500 group-hover:w-2 transition-all"></div>
               
-              {/* Live Status Tag */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-50 border border-orange-200 shadow-sm">
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
-                <span className="text-[10px] font-bold text-orange-700">15 Min Delay</span>
+              <div className="flex justify-between items-start mb-3 pl-1.5">
+                <div>
+                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wider bg-teal-50 px-2 py-0.5 rounded-full">Upcoming Appointment</span>
+                  <h4 className="font-bold text-gray-900 mt-2 text-lg">{doctor.name}</h4>
+                  <p className="text-xs font-medium text-gray-500">{doctor.specialty}</p>
+                </div>
+                
+                {/* Live Status Tag */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-50 border border-orange-200 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+                  <span className="text-[10px] font-bold text-orange-700">15 Min Delay</span>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-5 text-sm mt-4 pt-4 border-t border-gray-100 pl-1.5">
-              <div className="flex items-center gap-2 font-semibold text-blue-900 bg-blue-50 px-3 py-1.5 rounded-lg">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span>2:45 PM</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-gray-600 font-medium">
-                <MapPin className="w-4 h-4 text-teal-600" />
-                <span className="text-xs truncate">Room 204, Downtown Clinic</span>
+              <div className="flex items-center gap-5 text-sm mt-4 pt-4 border-t border-gray-100 pl-1.5">
+                <div className="flex items-center gap-2 font-semibold text-blue-900 bg-blue-50 px-3 py-1.5 rounded-lg">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  <span>{appointment.time}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-600 font-medium">
+                  <MapPin className="w-4 h-4 text-teal-600" />
+                  <span className="text-xs truncate">{appointment.room}, {selectedClinic}</span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white border border-teal-100 rounded-2xl p-6 shadow-sm text-center">
+              <p className="text-gray-400 text-sm font-medium">No active appointments</p>
+              <button onClick={() => navigate('/search')} className="mt-3 text-teal-600 font-bold text-sm hover:underline">
+                Book an Appointment →
+              </button>
+            </div>
+          )}
         </section>
         
         {/* Placeholder for more content to show scrolling */}

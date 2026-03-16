@@ -1,8 +1,43 @@
-import { LayoutDashboard, Users, Activity, FileText, Settings, Sparkles, CheckCircle2, Home, Search, User, BookOpen, ArrowLeft, ChevronRight, Clock, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Users, Activity, FileText, Settings, Sparkles, CheckCircle2, Home, Search, User, BookOpen, ArrowLeft, ChevronRight, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import { api, type Patient } from "@/data/mockDatabase";
 
 export function ClinicDashboard() {
   const navigate = useNavigate();
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [markingDone, setMarkingDone] = useState<number | null>(null);
+  const [applyingOverbook, setApplyingOverbook] = useState(false);
+
+  useEffect(() => {
+    api.getPatients(6).then((data) => {
+      setPatients(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleMarkDone = async (patient: Patient) => {
+    setMarkingDone(patient.id);
+    const success = await api.markPatientDone(patient.id);
+    if (success) {
+      setPatients((prev) => prev.filter((p) => p.id !== patient.id));
+      toast.success(`${patient.name} marked as done!`);
+    } else {
+      toast.error("Failed to update patient status.");
+    }
+    setMarkingDone(null);
+  };
+
+  const handleApplyOverbook = async () => {
+    setApplyingOverbook(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    toast.success("Overbook setting applied for 10:00 AM slot!");
+    setApplyingOverbook(false);
+  };
+
+  const activePatients = patients.filter((p) => p.status !== "done");
 
   return (
     <div className="flex-1 bg-gray-50 flex flex-col relative h-full">
@@ -39,7 +74,7 @@ export function ClinicDashboard() {
         <section className="space-y-3">
           <MetricCard 
             title="Total Patients Today" 
-            value="42" 
+            value={String(activePatients.length > 0 ? 42 : 38)} 
             trend="+5 from avg" 
             trendColor="text-blue-700 bg-blue-50" 
             icon={<Users className="w-5 h-5 text-blue-600" />}
@@ -89,8 +124,19 @@ export function ClinicDashboard() {
               </p>
             </div>
             
-            <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm relative z-10 shadow-indigo-200 text-sm">
-              Apply Overbook Setting
+            <button 
+              onClick={handleApplyOverbook}
+              disabled={applyingOverbook}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm relative z-10 shadow-indigo-200 text-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {applyingOverbook ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Applying…
+                </>
+              ) : (
+                "Apply Overbook Setting"
+              )}
             </button>
           </div>
         </section>
@@ -103,10 +149,25 @@ export function ClinicDashboard() {
           </h3>
           
           <div className="space-y-2">
-            <PatientCard token="#11" name="Marcus Webb" reason="General Checkup" />
-            <PatientCard token="#12" name="Elena Rostova" reason="Follow-up: Blood Work" />
-            <PatientCard token="#13" name="David Chen" reason="Migraine Assessment" />
-            <PatientCard token="#14" name="Aria Vance" reason="Sharp Stomach Pain" highlight />
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 text-teal-600 animate-spin" />
+              </div>
+            ) : activePatients.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm font-medium">No patients in queue</div>
+            ) : (
+              activePatients.map((p) => (
+                <PatientCard
+                  key={p.id}
+                  token={p.token}
+                  name={p.name}
+                  reason={p.reason}
+                  highlight={p.token === "#14"}
+                  isMarking={markingDone === p.id}
+                  onMarkDone={() => handleMarkDone(p)}
+                />
+              ))
+            )}
           </div>
         </section>
 
@@ -149,7 +210,7 @@ function MetricCard({ title, value, trend, trendColor, icon }: { title: string, 
   );
 }
 
-function PatientCard({ token, name, reason, highlight = false }: { token: string, name: string, reason: string, highlight?: boolean }) {
+function PatientCard({ token, name, reason, highlight = false, isMarking, onMarkDone }: { token: string, name: string, reason: string, highlight?: boolean, isMarking: boolean, onMarkDone: () => void }) {
   return (
     <div className={`bg-white border ${highlight ? 'border-orange-200 bg-orange-50/30' : 'border-teal-100'} p-4 rounded-2xl shadow-sm hover:shadow-md transition-all`}>
       <div className="flex items-start justify-between mb-3">
@@ -170,9 +231,17 @@ function PatientCard({ token, name, reason, highlight = false }: { token: string
         <p className="text-xs text-gray-600 font-medium">{reason}</p>
       </div>
       
-      <button className="w-full inline-flex items-center justify-center gap-2 bg-white border border-teal-200 hover:bg-teal-50 hover:border-teal-300 text-teal-700 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95">
-        <CheckCircle2 className="w-4 h-4" />
-        Mark as Done
+      <button 
+        onClick={onMarkDone}
+        disabled={isMarking}
+        className="w-full inline-flex items-center justify-center gap-2 bg-white border border-teal-200 hover:bg-teal-50 hover:border-teal-300 text-teal-700 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {isMarking ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <CheckCircle2 className="w-4 h-4" />
+        )}
+        {isMarking ? "Updating…" : "Mark as Done"}
       </button>
     </div>
   );

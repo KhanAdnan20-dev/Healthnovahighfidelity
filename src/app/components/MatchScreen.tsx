@@ -1,8 +1,34 @@
-import { ChevronLeft, Star, MapPin, Clock, BadgeCheck, Stethoscope } from "lucide-react";
+import { ChevronLeft, Star, MapPin, Clock, BadgeCheck, Stethoscope, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import { api, type Doctor } from "@/data/mockDatabase";
 
 export function MatchScreen() {
   const navigate = useNavigate();
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bookingId, setBookingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.getDoctors().then((data) => {
+      setDoctors(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleBook = async (doctor: Doctor) => {
+    setBookingId(doctor.id);
+    try {
+      await api.bookAppointment(doctor.id);
+      toast.success(`Booked with ${doctor.name}!`);
+      navigate("/queue");
+    } catch {
+      toast.error("Booking failed. Please try again.");
+    } finally {
+      setBookingId(null);
+    }
+  };
 
   return (
     <div className="flex-1 bg-teal-50/30 flex flex-col h-full relative">
@@ -32,38 +58,20 @@ export function MatchScreen() {
 
         {/* Listings */}
         <div className="space-y-4 mt-2">
-          <DoctorCard 
-            name="Dr. Aris Thorne"
-            specialty="Gastroenterology"
-            reviews={142}
-            distance="1.2 km"
-            nextSlot="11:30 AM Today"
-            avatarColor="bg-teal-100"
-          />
-          <DoctorCard 
-            name="Dr. Elena Rostova"
-            specialty="Gastroenterology • Internal Med"
-            reviews={89}
-            distance="2.5 km"
-            nextSlot="2:15 PM Today"
-            avatarColor="bg-blue-100"
-          />
-          <DoctorCard 
-            name="Dr. Marcus Webb"
-            specialty="Gastroenterology"
-            reviews={310}
-            distance="3.8 km"
-            nextSlot="9:00 AM Tomorrow"
-            avatarColor="bg-indigo-100"
-          />
-          <DoctorCard 
-            name="Dr. Chloe Vance"
-            specialty="Digestive Health Specialist"
-            reviews={56}
-            distance="4.1 km"
-            nextSlot="10:45 AM Tomorrow"
-            avatarColor="bg-emerald-100"
-          />
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
+            </div>
+          ) : (
+            doctors.map((doc) => (
+              <DoctorCard
+                key={doc.id}
+                doctor={doc}
+                isBooking={bookingId === doc.id}
+                onBook={() => handleBook(doc)}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -71,26 +79,23 @@ export function MatchScreen() {
 }
 
 function DoctorCard({ 
-  name, 
-  specialty, 
-  reviews, 
-  distance, 
-  nextSlot,
-  avatarColor 
+  doctor,
+  isBooking,
+  onBook,
 }: { 
-  name: string, 
-  specialty: string, 
-  reviews: number, 
-  distance: string, 
-  nextSlot: string,
-  avatarColor: string
+  doctor: Doctor;
+  isBooking: boolean;
+  onBook: () => void;
 }) {
+  const { name, specialty, reviews, distance, nextSlot, avatarColor } = doctor;
+  const initial = name.includes(" ") ? name.split(" ")[1][0] : name[0];
+
   return (
     <div className="bg-white border border-teal-100/60 rounded-2xl p-4 shadow-sm flex flex-col gap-4 hover:shadow-md transition-shadow">
       <div className="flex gap-4 items-start">
         {/* Avatar Placeholder */}
         <div className={`w-16 h-16 rounded-2xl flex-shrink-0 border border-teal-200/50 ${avatarColor} flex items-center justify-center text-teal-600 font-bold text-xl`}>
-          {name.split(' ')[1][0]}
+          {initial}
         </div>
         
         {/* Info */}
@@ -130,8 +135,19 @@ function DoctorCard({
           </div>
         </div>
         
-        <button className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-colors active:scale-[0.98] shadow-sm shadow-teal-200">
-          Book & Join Queue
+        <button 
+          onClick={onBook}
+          disabled={isBooking}
+          className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-colors active:scale-[0.98] shadow-sm shadow-teal-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isBooking ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Booking…
+            </>
+          ) : (
+            "Book & Join Queue"
+          )}
         </button>
       </div>
     </div>
