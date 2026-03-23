@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, Plus, FileText, Info, BarChart2, CheckCircle2, Upload, Users } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, YAxis } from "recharts";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 
-type LockerTab = "records" | "family";
+type LockerTab = "records" | "family" | "doctor-emergency";
 
 type RecordPoint = {
   name: string;
@@ -26,6 +26,8 @@ type UploadRecord = {
   facility: string;
   summary: string;
 };
+
+type SecureVaultType = "important" | "semi-private";
 
 type FamilyMember = {
   id: string;
@@ -214,18 +216,99 @@ const uploadActions = [
     title: "Request from clinic",
     description: "Ask your clinic to share the latest consultation summary directly.",
   },
+  {
+    id: "emergency",
+    title: "Upload emergency report",
+    description: "Add urgent MRI, oncology, trauma, or ICU documents with detailed context.",
+  },
 ];
+
+const secureVaultLabels: Record<SecureVaultType, string> = {
+  important: "Important Reports",
+  "semi-private": "Semi-Private Reports",
+};
+
+const initialSecureUploads: Record<SecureVaultType, UploadRecord[]> = {
+  important: [
+    {
+      id: "mri-brain-2024",
+      title: "MRI Brain Screening",
+      date: "Feb 19, 2024",
+      type: "MRI",
+      facility: "Neuro Imaging Center",
+      summary: "High-priority neuro scan shared under protected access for specialist review.",
+    },
+    {
+      id: "oncology-histopath",
+      title: "Oncology Histopathology",
+      date: "Jan 08, 2024",
+      type: "Cancer Workup",
+      facility: "Regional Oncology Unit",
+      summary: "Biopsy and pathology findings requiring controlled doctor-only access.",
+    },
+  ],
+  "semi-private": [
+    {
+      id: "cardiac-ct",
+      title: "Cardiac CT Follow-up",
+      date: "Dec 15, 2023",
+      type: "CT Scan",
+      facility: "Metro Heart Lab",
+      summary: "Semi-private imaging data restricted to verified providers.",
+    },
+  ],
+};
 
 export function LockerScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<LockerTab>("records");
   const [selectedMemberId, setSelectedMemberId] = useState("self");
   const [selectedUpload, setSelectedUpload] = useState<UploadRecord | null>(null);
+  const [selectedUploadOwnerLabel, setSelectedUploadOwnerLabel] = useState("Self");
   const [showInsight, setShowInsight] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [uploadsByMember, setUploadsByMember] = useState<Record<string, UploadRecord[]>>(
+    Object.fromEntries(familyMembers.map((member) => [member.id, member.uploads])) as Record<
+      string,
+      UploadRecord[]
+    >,
+  );
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [secureVaultType, setSecureVaultType] = useState<SecureVaultType>("important");
+  const [secureUploads, setSecureUploads] =
+    useState<Record<SecureVaultType, UploadRecord[]>>(initialSecureUploads);
+  const [verifiedVaults, setVerifiedVaults] = useState<Record<SecureVaultType, boolean>>({
+    important: false,
+    "semi-private": false,
+  });
+  const [pendingVaultVerification, setPendingVaultVerification] =
+    useState<SecureVaultType>("important");
+  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
+  const [openEmergencyAfterVerification, setOpenEmergencyAfterVerification] = useState(false);
+  const [doctorId, setDoctorId] = useState("");
+  const [doctorCode, setDoctorCode] = useState("");
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
+  const [emergencyTitle, setEmergencyTitle] = useState("");
+  const [emergencyCondition, setEmergencyCondition] = useState("");
+  const [emergencyUrgency, setEmergencyUrgency] = useState("Critical");
+  const [emergencyHospital, setEmergencyHospital] = useState("");
+  const [emergencySummary, setEmergencySummary] = useState("");
+  const [emergencyAttachmentName, setEmergencyAttachmentName] = useState("");
+  const [emergencyReports, setEmergencyReports] = useState<UploadRecord[]>([]);
+  const [lastSavedEmergency, setLastSavedEmergency] = useState<UploadRecord | null>(null);
+  const [isSavingEmergency, setIsSavingEmergency] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const emergencyFileInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedMember =
+  const selectedMemberBase =
     familyMembers.find((member) => member.id === selectedMemberId) ?? familyMembers[0];
+  const selectedMember = {
+    ...selectedMemberBase,
+    uploads: uploadsByMember[selectedMemberBase.id] ?? [],
+  };
 
   const chartData = selectedMember.chartData;
   const firstLabel = chartData[0]?.name ?? "";
@@ -235,7 +318,200 @@ export function LockerScreen() {
   const handleMemberSelect = (memberId: string) => {
     setSelectedMemberId(memberId);
     setShowInsight(false);
+    setUploadError(null);
+    setUploadFeedback(null);
   };
+
+  const requestSecureAccess = (vaultType: SecureVaultType) => {
+    setSecureVaultType(vaultType);
+
+    if (verifiedVaults[vaultType]) {
+      return;
+    }
+
+    setPendingVaultVerification(vaultType);
+    setDoctorId("");
+    setDoctorCode("");
+    setVerifyError(null);
+    setShowVerifyDialog(true);
+  };
+
+  const verifyDoctorAccess = () => {
+    const hasDoctorId = doctorId.trim().length > 0;
+    const hasAccessCode = doctorCode.trim().length > 0;
+
+    if (!hasDoctorId || !hasAccessCode) {
+      setVerifyError("Enter doctor identity and access code to continue.");
+      return;
+    }
+
+    setVerifiedVaults({ important: true, "semi-private": true });
+    setSecureVaultType(pendingVaultVerification);
+    setShowVerifyDialog(false);
+    setVerifyError(null);
+    setUploadFeedback("Doctor verification successful. Emergency options are now unlocked.");
+
+    if (pendingVaultVerification === "important" && openEmergencyAfterVerification) {
+      setShowEmergencyDialog(true);
+      setShowAddDialog(false);
+    }
+
+    setOpenEmergencyAfterVerification(false);
+  };
+
+  const openEmergencyFlow = () => {
+    setSecureVaultType("important");
+    setUploadError(null);
+
+    if (verifiedVaults.important) {
+      setShowEmergencyDialog(true);
+      return;
+    }
+
+    setPendingVaultVerification("important");
+    setDoctorId("");
+    setDoctorCode("");
+    setVerifyError(null);
+    setOpenEmergencyAfterVerification(true);
+    setShowVerifyDialog(true);
+  };
+
+  const openPdfPicker = () => {
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handlePdfUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      setUploadError("Only PDF files are allowed.");
+      setUploadFeedback(null);
+      event.target.value = "";
+      return;
+    }
+
+    const recordId = `upload-${Date.now()}`;
+    const cleanTitle = file.name.replace(/\.pdf$/i, "").trim() || "Uploaded Report";
+    const sizeMb = file.size / (1024 * 1024);
+    const newRecord: UploadRecord = {
+      id: recordId,
+      title: cleanTitle,
+      date: new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      }),
+      type: "PDF Report",
+      facility: "Manual Upload",
+      summary: `${file.name} uploaded from device (${sizeMb.toFixed(2)} MB).`,
+    };
+
+    setUploadsByMember((current) => ({
+      ...current,
+      [selectedMemberBase.id]: [newRecord, ...(current[selectedMemberBase.id] ?? [])],
+    }));
+    setSelectedUploadOwnerLabel(selectedMember.label);
+    setSelectedUpload(newRecord);
+    setShowAddDialog(false);
+    setUploadError(null);
+    setUploadFeedback(`Uploaded ${file.name}`);
+    event.target.value = "";
+  };
+
+  const handleEmergencyAttachmentSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setUploadError("Emergency attachment must be a PDF file.");
+      event.target.value = "";
+      return;
+    }
+
+    setUploadError(null);
+    setEmergencyAttachmentName(file.name);
+    event.target.value = "";
+  };
+
+  const submitEmergencyReport = () => {
+    const title = emergencyTitle.trim();
+    const condition = emergencyCondition.trim();
+    const hospital = emergencyHospital.trim();
+    const summary = emergencySummary.trim();
+
+    if (!title || !condition || !hospital || !summary) {
+      setUploadError("Fill all emergency report details before submitting.");
+      return;
+    }
+
+    if (isSavingEmergency) {
+      return;
+    }
+
+    setIsSavingEmergency(true);
+
+    const emergencyRecord: UploadRecord = {
+      id: `emergency-${Date.now()}`,
+      title,
+      date: new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      }),
+      type: `Emergency | ${emergencyUrgency}`,
+      facility: hospital,
+      summary: `${condition}. ${summary}${
+        emergencyAttachmentName ? ` Attachment: ${emergencyAttachmentName}.` : ""
+      }`,
+    };
+    const shortDescription = buildShortDescription(emergencyRecord.summary);
+
+    setSecureUploads((current) => ({
+      ...current,
+      important: [emergencyRecord, ...current.important],
+    }));
+    setEmergencyReports((current) => [emergencyRecord, ...current]);
+    setLastSavedEmergency(emergencyRecord);
+    setVerifiedVaults((current) => ({ ...current, important: true }));
+    setSecureVaultType("important");
+    setSelectedUploadOwnerLabel("Important Reports Vault");
+    setSelectedUpload(emergencyRecord);
+    setUploadFeedback(`Emergency report saved: ${shortDescription}`);
+    setUploadError(null);
+    setEmergencyTitle("");
+    setEmergencyCondition("");
+    setEmergencyUrgency("Critical");
+    setEmergencyHospital("");
+    setEmergencySummary("");
+    setEmergencyAttachmentName("");
+    setShowEmergencyDialog(false);
+    setShowAddDialog(false);
+    setIsSavingEmergency(false);
+  };
+
+  const isEmergencyFormValid =
+    emergencyTitle.trim().length > 0 &&
+    emergencyCondition.trim().length > 0 &&
+    emergencyHospital.trim().length > 0 &&
+    emergencySummary.trim().length > 0;
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get("tab");
+
+    if (requestedTab === "records" || requestedTab === "family" || requestedTab === "doctor-emergency") {
+      setActiveTab(requestedTab);
+    }
+  }, [location.search]);
 
   return (
     <div className="flex-1 bg-teal-50/30 flex flex-col h-full relative">
@@ -260,21 +536,43 @@ export function LockerScreen() {
           label="Family Members"
           onClick={() => setActiveTab("family")}
         />
+        <TabButton
+          active={activeTab === "doctor-emergency"}
+          label="Doctor Emergency"
+          onClick={() => setActiveTab("doctor-emergency")}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-0 relative pb-24">
-        <div className="flex overflow-x-auto gap-4 p-4 no-scrollbar border-b border-teal-100 bg-white/50">
-          {familyMembers.map((member) => (
-            <AvatarItem
-              key={member.id}
-              active={selectedMember.id === member.id}
-              label={member.label}
-              color={member.color}
-              text={member.text}
-              onClick={() => handleMemberSelect(member.id)}
-            />
-          ))}
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={handlePdfUpload}
+        />
+        <input
+          ref={emergencyFileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={handleEmergencyAttachmentSelect}
+        />
+
+        {activeTab !== "doctor-emergency" && (
+          <div className="flex overflow-x-auto gap-4 p-4 no-scrollbar border-b border-teal-100 bg-white/50">
+            {familyMembers.map((member) => (
+              <AvatarItem
+                key={member.id}
+                active={selectedMember.id === member.id}
+                label={member.label}
+                color={member.color}
+                text={member.text}
+                onClick={() => handleMemberSelect(member.id)}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="p-4 space-y-6">
           {activeTab === "family" && (
@@ -322,7 +620,8 @@ export function LockerScreen() {
             </section>
           )}
 
-          <div className="bg-white border border-teal-100 rounded-2xl p-4 shadow-sm relative hover:shadow-md transition-shadow">
+          {activeTab !== "doctor-emergency" && (
+            <div className="bg-white border border-teal-100 rounded-2xl p-4 shadow-sm relative hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-4 gap-3">
               <div className="flex items-center gap-2 text-gray-800">
                 <BarChart2 className="w-5 h-5 text-teal-600" />
@@ -386,8 +685,170 @@ export function LockerScreen() {
               <span>{lastLabel}</span>
             </div>
           </div>
+          )}
 
-          <div>
+          {activeTab === "doctor-emergency" && (
+            <section className="bg-white border border-teal-100 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Step 1: Doctor Verification</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Verify once, then unlock emergency actions and protected vault options.
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
+                  Doctor-only access
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 mb-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+                  Verification Status
+                </p>
+                <p className="text-xs text-amber-900 font-semibold">
+                  {verifiedVaults.important
+                    ? "Verified. Step 2 actions are now available."
+                    : "Pending. Complete verification to continue to Step 2."}
+                </p>
+                {!verifiedVaults.important && (
+                  <button
+                    onClick={() => requestSecureAccess("important")}
+                    className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700"
+                  >
+                    Verify Doctor Credentials
+                  </button>
+                )}
+              </div>
+
+              {verifiedVaults.important && (
+                <>
+                  <div className="pt-2 border-t border-teal-100">
+                    <h4 className="text-sm font-bold text-gray-900 mb-2">Step 2: Choose Protected Vault</h4>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        onClick={() => setSecureVaultType("important")}
+                        className={`rounded-xl border p-2.5 text-left transition-colors ${
+                          secureVaultType === "important"
+                            ? "border-teal-300 bg-teal-50"
+                            : "border-teal-100 hover:border-teal-200"
+                        }`}
+                      >
+                        <p className="text-xs font-bold text-gray-900">Important Reports</p>
+                        <p className="text-[11px] text-gray-500 mt-1">MRI, oncology, critical scans</p>
+                      </button>
+                      <button
+                        onClick={() => setSecureVaultType("semi-private")}
+                        className={`rounded-xl border p-2.5 text-left transition-colors ${
+                          secureVaultType === "semi-private"
+                            ? "border-teal-300 bg-teal-50"
+                            : "border-teal-100 hover:border-teal-200"
+                        }`}
+                      >
+                        <p className="text-xs font-bold text-gray-900">Semi-Private Reports</p>
+                        <p className="text-[11px] text-gray-500 mt-1">Follow-up diagnostics, specialty notes</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(secureUploads[secureVaultType] ?? []).map((record) => (
+                      <UploadItem
+                        key={record.id}
+                        title={record.title}
+                        date={record.date}
+                        type={record.type}
+                        onClick={() => {
+                          setSelectedUploadOwnerLabel(secureVaultLabels[secureVaultType]);
+                          setSelectedUpload(record);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {activeTab === "doctor-emergency" && (
+            <section className="bg-red-50/80 border-2 border-red-200 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="font-bold text-red-900 text-sm">Emergency Report Center</h3>
+                  <p className="text-xs text-red-800 mt-1">
+                    Separate high-priority area for emergency-oriented reports with short care summaries.
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 bg-white px-2 py-1 rounded-full border border-red-200">
+                  Critical Boundary
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-red-200 bg-white p-3 mb-3">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 mb-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+                    Doctor Verification Status
+                  </p>
+                  <p className="text-xs text-amber-900 font-semibold">
+                    {verifiedVaults.important
+                      ? "Verified doctor access active. You can now save emergency reports."
+                      : "Locked: doctor verification required before adding emergency reports."}
+                  </p>
+                </div>
+                <p className="text-[11px] font-bold text-red-700 uppercase tracking-wider mb-1">
+                  Saved Emergency Reports ({emergencyReports.length})
+                </p>
+                {lastSavedEmergency && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 mb-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                      Recently Saved
+                    </p>
+                    <p className="text-xs font-bold text-gray-900 line-clamp-1">{lastSavedEmergency.title}</p>
+                    <p className="text-[11px] text-emerald-900 mt-1 line-clamp-2">
+                      {buildShortDescription(lastSavedEmergency.summary)}
+                    </p>
+                    <p className="text-[11px] text-gray-600 mt-1">
+                      {lastSavedEmergency.type} | {lastSavedEmergency.facility}
+                    </p>
+                  </div>
+                )}
+                {emergencyReports.length === 0 ? (
+                  <p className="text-xs text-gray-600">
+                    No emergency reports saved yet. Add one to create a rapid-access emergency file.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {emergencyReports.map((report) => (
+                      <button
+                        key={report.id}
+                        onClick={() => {
+                          setSelectedUploadOwnerLabel("Emergency Report Center");
+                          setSelectedUpload(report);
+                        }}
+                        className="w-full text-left rounded-xl border border-red-100 bg-red-50/40 p-2.5 hover:bg-red-50"
+                      >
+                        <p className="text-xs font-bold text-gray-900 line-clamp-1">{report.title}</p>
+                        <p className="text-[11px] text-red-800 mt-1 line-clamp-2">
+                          {buildShortDescription(report.summary)}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={openEmergencyFlow}
+                className={`w-full rounded-xl py-2.5 text-sm font-bold text-white ${
+                  verifiedVaults.important ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"
+                }`}
+              >
+                {verifiedVaults.important ? "Save Emergency Report" : "Verify Doctor to Save Emergency Report"}
+              </button>
+            </section>
+          )}
+
+          {activeTab !== "doctor-emergency" && (
+            <div>
             <div className="flex items-center justify-between gap-3 mb-3">
               <h3 className="font-bold text-gray-800 text-sm">Recent Uploads</h3>
               <button
@@ -397,6 +858,16 @@ export function LockerScreen() {
                 Add New
               </button>
             </div>
+            {uploadFeedback && (
+              <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-3">
+                {uploadFeedback}
+              </p>
+            )}
+            {uploadError && (
+              <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
+                {uploadError}
+              </p>
+            )}
             <div className="space-y-3">
               {selectedMember.uploads.map((upload) => (
                 <UploadItem
@@ -404,20 +875,26 @@ export function LockerScreen() {
                   title={upload.title}
                   date={upload.date}
                   type={upload.type}
-                  onClick={() => setSelectedUpload(upload)}
+                  onClick={() => {
+                    setSelectedUploadOwnerLabel(selectedMember.label);
+                    setSelectedUpload(upload);
+                  }}
                 />
               ))}
             </div>
           </div>
+          )}
         </div>
 
-        <button
-          onClick={() => setShowAddDialog(true)}
-          className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg shadow-teal-200 flex items-center justify-center hover:from-teal-600 hover:to-teal-700 active:scale-95 transition-all z-20"
-          aria-label="Add new record"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        {activeTab !== "doctor-emergency" && (
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg shadow-teal-200 flex items-center justify-center hover:from-teal-600 hover:to-teal-700 active:scale-95 transition-all z-20"
+            aria-label="Add new record"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
       </div>
 
       <Dialog open={Boolean(selectedUpload)} onOpenChange={(open) => !open && setSelectedUpload(null)}>
@@ -428,7 +905,7 @@ export function LockerScreen() {
                 <DialogHeader className="text-left">
                   <DialogTitle className="text-xl">{selectedUpload.title}</DialogTitle>
                   <DialogDescription className="text-white/80">
-                    {selectedMember.label} | {selectedUpload.date}
+                    {selectedUploadOwnerLabel} | {selectedUpload.date}
                   </DialogDescription>
                 </DialogHeader>
               </div>
@@ -464,7 +941,17 @@ export function LockerScreen() {
             {uploadActions.map((action) => (
               <button
                 key={action.id}
-                onClick={() => setShowAddDialog(false)}
+                onClick={() => {
+                  if (action.id === "upload") {
+                    openPdfPicker();
+                    return;
+                  }
+                  if (action.id === "emergency") {
+                    openEmergencyFlow();
+                    return;
+                  }
+                  setShowAddDialog(false);
+                }}
                 className="w-full rounded-2xl border border-teal-100 bg-white p-4 text-left hover:border-teal-200 hover:bg-teal-50/60 transition-colors"
               >
                 <div className="flex items-start gap-3">
@@ -481,9 +968,171 @@ export function LockerScreen() {
             <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-emerald-900 font-medium leading-relaxed">
-                This prototype now supports the full add-record interaction path, even though it does not persist files yet.
+                Upload a PDF report to instantly place it in Recent Uploads for the selected member.
               </p>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showVerifyDialog}
+        onOpenChange={(open) => {
+          setShowVerifyDialog(open);
+          if (!open) {
+            setOpenEmergencyAfterVerification(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-3xl border-teal-100 p-0 overflow-hidden">
+          <div className="bg-amber-50 border-b border-amber-100 p-5">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-xl text-gray-900">Doctor Verification Required</DialogTitle>
+              <DialogDescription className="text-gray-700">
+                Enter dummy credentials to unlock {secureVaultLabels[pendingVaultVerification]}.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="p-5 space-y-3">
+            <input
+              value={doctorId}
+              onChange={(event) => setDoctorId(event.target.value)}
+              placeholder="Doctor ID (e.g., DR-1234)"
+              className="w-full rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+            />
+            <input
+              value={doctorCode}
+              onChange={(event) => setDoctorCode(event.target.value)}
+              placeholder="Access Code"
+              type="password"
+              className="w-full rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+            />
+            {verifyError && (
+              <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {verifyError}
+              </p>
+            )}
+            <button
+              onClick={verifyDoctorAccess}
+              className="w-full rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white hover:bg-amber-700"
+            >
+              Verify and Unlock
+            </button>
+            <p className="text-[11px] text-gray-500">
+              Dummy method: enter any doctor identity and any non-empty access code.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-teal-100 p-0 overflow-hidden">
+          <div className="bg-red-50 border-b border-red-100 p-5">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-xl text-gray-900">Emergency-Oriented Report</DialogTitle>
+              <DialogDescription className="text-gray-700">
+                Capture urgent details for MRI, cancer care, trauma, or ICU handoff.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="p-5 space-y-3">
+            <input
+              value={emergencyTitle}
+              onChange={(event) => {
+                setEmergencyTitle(event.target.value);
+                if (uploadError) {
+                  setUploadError(null);
+                }
+              }}
+              placeholder="Report title (e.g., MRI Stroke Emergency)"
+              className="w-full rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+            />
+            <input
+              value={emergencyCondition}
+              onChange={(event) => {
+                setEmergencyCondition(event.target.value);
+                if (uploadError) {
+                  setUploadError(null);
+                }
+              }}
+              placeholder="Primary condition"
+              className="w-full rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={emergencyUrgency}
+                onChange={(event) => setEmergencyUrgency(event.target.value)}
+                className="rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+              >
+                <option>Critical</option>
+                <option>High</option>
+                <option>Moderate</option>
+              </select>
+              <input
+                value={emergencyHospital}
+                onChange={(event) => {
+                  setEmergencyHospital(event.target.value);
+                  if (uploadError) {
+                    setUploadError(null);
+                  }
+                }}
+                placeholder="Hospital / Facility"
+                className="rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+              />
+            </div>
+            <textarea
+              value={emergencySummary}
+              onChange={(event) => {
+                setEmergencySummary(event.target.value);
+                if (uploadError) {
+                  setUploadError(null);
+                }
+              }}
+              placeholder="Detailed emergency notes: vitals, diagnosis summary, immediate care instructions, escalation path"
+              className="w-full min-h-24 rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300 resize-none"
+            />
+            <div className="rounded-xl border border-red-100 bg-red-50/60 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-red-700 mb-1">
+                Save Preview
+              </p>
+              <p className="text-xs font-semibold text-gray-900 line-clamp-1">
+                {emergencyTitle.trim() || "Untitled Emergency Report"}
+              </p>
+              <p className="text-[11px] text-red-900 mt-1 line-clamp-2">
+                {buildShortDescription(emergencySummary.trim() || "Summary will appear here after you type details.")}
+              </p>
+              <p className="text-[11px] text-gray-600 mt-1">
+                {emergencyUrgency} | {emergencyHospital.trim() || "Facility pending"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-dashed border-red-200 bg-red-50/50 p-3">
+              <button
+                onClick={() => emergencyFileInputRef.current?.click()}
+                className="w-full rounded-lg bg-white border border-red-100 py-2 text-xs font-bold text-red-700 hover:bg-red-50"
+              >
+                Attach Emergency PDF
+              </button>
+              {emergencyAttachmentName && (
+                <p className="text-xs text-red-700 mt-2 font-semibold">Attached: {emergencyAttachmentName}</p>
+              )}
+            </div>
+            {uploadError && (
+              <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {uploadError}
+              </p>
+            )}
+            <button
+              onClick={submitEmergencyReport}
+              disabled={isSavingEmergency || !isEmergencyFormValid}
+              className="w-full rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSavingEmergency ? "Saving Emergency Report..." : "Save Emergency Report"}
+            </button>
+            {!isEmergencyFormValid && (
+              <p className="text-[11px] text-gray-500 text-center">
+                Complete title, condition, hospital, and summary to enable saving.
+              </p>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -577,6 +1226,14 @@ function UploadItem({
       </span>
     </button>
   );
+}
+
+function buildShortDescription(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= 95) {
+    return compact;
+  }
+  return `${compact.slice(0, 92)}...`;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

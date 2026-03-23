@@ -126,6 +126,10 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Manrope", "Segoe UI", "Tahoma", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    margin: 0;
   }
 
   /**
@@ -141,18 +145,21 @@
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    font-family: "Sora", "Manrope", sans-serif;
   }
 
   h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    font-family: "Sora", "Manrope", sans-serif;
   }
 
   h3 {
     font-size: var(--text-lg);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    font-family: "Sora", "Manrope", sans-serif;
   }
 
   h4 {

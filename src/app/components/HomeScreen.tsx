@@ -1,13 +1,82 @@
 import { Bell, MapPin, ChevronDown, Calendar, FolderHeart, Users, Pill, Clock, Activity, Search, Home, User, BookOpen } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useMemo, useState } from "react";
+
+type Clinic = {
+  id: string;
+  name: string;
+};
 
 export function HomeScreen() {
   const navigate = useNavigate();
+  const [clinics, setClinics] = useState<Clinic[]>([
+    { id: "downtown", name: "Downtown Clinic" },
+    { id: "riverside", name: "Riverside Health Hub" },
+  ]);
+  const [selectedClinicId, setSelectedClinicId] = useState("downtown");
+  const [showClinicMenu, setShowClinicMenu] = useState(false);
+  const [newClinicName, setNewClinicName] = useState("");
+  const [clinicSearch, setClinicSearch] = useState("");
+  const [headerMessage, setHeaderMessage] = useState<string | null>(null);
+  const [quickActionMessage, setQuickActionMessage] = useState<string | null>(null);
+  const [recentReportMessage, setRecentReportMessage] = useState<string | null>(null);
+
+  const recentReports = [
+    { id: "rr-bloodwork", title: "Blood Work Summary", type: "Lab Report", date: "Today" },
+    { id: "rr-ecg", title: "ECG Follow-up", type: "Cardiology", date: "2 days ago" },
+    { id: "rr-prescription", title: "Updated Prescription", type: "Medication", date: "Last week" },
+  ];
+
+  const selectedClinic = clinics.find((clinic) => clinic.id === selectedClinicId) ?? clinics[0];
+  const filteredClinics = clinics.filter((clinic) =>
+    clinic.name.toLowerCase().includes(clinicSearch.trim().toLowerCase()),
+  );
+  const aiClinicResponse = useMemo(() => {
+    const query = clinicSearch.trim();
+    if (!query) {
+      return null;
+    }
+
+    if (filteredClinics.length > 0) {
+      return {
+        title: `AI matched ${filteredClinics.length} clinic${filteredClinics.length > 1 ? "s" : ""}`,
+        summary: `Based on "${query}", these options are likely relevant for your care request.`,
+        suggestions: filteredClinics.slice(0, 3).map((clinic) => clinic.name),
+        confidence: Math.min(97, 72 + filteredClinics.length * 8),
+      };
+    }
+
+    return {
+      title: "AI could not find an exact match",
+      summary:
+        "Try broader terms like city, specialty, or nearby landmark. You can also add a new clinic below.",
+      suggestions: [
+        `Try: ${query} care center`,
+        `Try: ${query} hospital`,
+        "Or add this clinic manually",
+      ],
+      confidence: 64,
+    };
+  }, [clinicSearch, filteredClinics]);
+
+  const addClinic = () => {
+    const cleanName = newClinicName.trim();
+    if (!cleanName) {
+      return;
+    }
+
+    const id = `clinic-${Date.now()}`;
+    const clinic = { id, name: cleanName };
+    setClinics((current) => [clinic, ...current]);
+    setSelectedClinicId(id);
+    setNewClinicName("");
+    setShowClinicMenu(false);
+  };
 
   return (
     <div className="flex-1 bg-gray-50 flex flex-col relative h-full">
       {/* Header */}
-      <header className="flex justify-between items-center p-4 border-b border-teal-100 bg-white shadow-sm">
+      <header className="flex justify-between items-center p-4 border-b border-teal-100 bg-white shadow-sm relative z-20">
         <div className="flex items-center gap-2">
           {/* HealthNova Logo */}
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-md">
@@ -15,22 +84,121 @@ export function HomeScreen() {
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-700 tracking-tight">HealthNova</span>
-            <div className="flex items-center gap-1 cursor-pointer mt-[-2px]">
+            <button
+              onClick={() => {
+                setShowClinicMenu((current) => !current);
+                setClinicSearch("");
+              }}
+              className="flex items-center gap-1 cursor-pointer mt-[-2px] rounded-md px-1 py-0.5 hover:bg-teal-50"
+            >
               <MapPin className="w-3 h-3 text-teal-600" />
-              <span className="text-xs text-gray-500 font-medium">Downtown Clinic</span>
+              <span className="text-xs text-gray-500 font-medium">{selectedClinic?.name}</span>
               <ChevronDown className="w-3 h-3 text-gray-400" />
-            </div>
+            </button>
           </div>
         </div>
 
         {/* Notification Bell */}
-        <button className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 relative hover:bg-teal-100 transition-colors">
+        <button
+          onClick={() => setHeaderMessage("Notifications synced. You have 1 delay alert.")}
+          className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 relative hover:bg-teal-100 transition-colors"
+        >
           <Bell className="w-5 h-5 text-teal-700" />
           <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-red-500 shadow-sm border border-white"></span>
         </button>
+
+        {showClinicMenu && (
+          <div className="absolute left-4 right-4 top-[72px] rounded-2xl border border-teal-100 bg-white p-4 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-wider text-teal-700 mb-2">Clinics</p>
+            <div className="relative mb-3">
+              <Search className="w-4 h-4 text-teal-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={clinicSearch}
+                onChange={(event) => setClinicSearch(event.target.value)}
+                placeholder="Search clinics"
+                className="w-full rounded-xl border border-teal-100 pl-9 pr-3 py-2 text-sm outline-none focus:border-teal-300"
+              />
+            </div>
+            {aiClinicResponse && (
+              <div className="mb-3 rounded-2xl border border-teal-200 bg-teal-50/80 p-3">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">AI Assistant</p>
+                  <span className="text-[10px] font-bold text-teal-800 bg-white border border-teal-200 rounded-full px-2 py-0.5">
+                    {aiClinicResponse.confidence}% confidence
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-teal-900">{aiClinicResponse.title}</p>
+                <p className="text-xs text-teal-800 mt-1">{aiClinicResponse.summary}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {aiClinicResponse.suggestions.map((suggestion) => (
+                    <span
+                      key={suggestion}
+                      className="text-[10px] font-semibold text-teal-700 bg-white border border-teal-100 rounded-full px-2 py-1"
+                    >
+                      {suggestion}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+              {filteredClinics.map((clinic) => (
+                <button
+                  key={clinic.id}
+                  onClick={() => {
+                    setSelectedClinicId(clinic.id);
+                    setShowClinicMenu(false);
+                    setClinicSearch("");
+                  }}
+                  className={`w-full text-left rounded-xl border px-3 py-2 text-sm transition-colors ${
+                    selectedClinicId === clinic.id
+                      ? "border-teal-200 bg-teal-50 text-teal-800 font-semibold"
+                      : "border-gray-100 bg-white text-gray-700 hover:border-teal-100 hover:bg-teal-50/50"
+                  }`}
+                >
+                  {clinic.name}
+                </button>
+              ))}
+              {filteredClinics.length === 0 && (
+                <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                  No clinics found for "{clinicSearch}".
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 border-t border-teal-100 pt-3">
+              <p className="text-[11px] font-bold text-gray-700 mb-2">Add Clinic</p>
+              <div className="flex gap-2">
+                <input
+                  value={newClinicName}
+                  onChange={(event) => setNewClinicName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      addClinic();
+                    }
+                  }}
+                  placeholder="Enter clinic name"
+                  className="flex-1 rounded-xl border border-teal-100 px-3 py-2 text-sm outline-none focus:border-teal-300"
+                />
+                <button
+                  onClick={addClinic}
+                  className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-bold text-white hover:bg-teal-700"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 bg-teal-50/30">
+      {headerMessage && (
+        <div className="mx-4 mt-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800">
+          {headerMessage}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 pb-24 lg:pb-8 bg-teal-50/30">
         
         {/* Hero Section: AI Search */}
         <section className="bg-gradient-to-br from-teal-600 to-blue-700 rounded-3xl p-6 shadow-lg relative overflow-hidden">
@@ -53,9 +221,21 @@ export function HomeScreen() {
           <div className="grid grid-cols-4 gap-3">
             <ActionItem onClick={() => navigate('/queue')} icon={<Calendar className="text-blue-600" />} label="Book Appt" />
             <ActionItem onClick={() => navigate('/locker')} icon={<FolderHeart className="text-teal-600" />} label="Locker" />
-            <ActionItem icon={<Users className="text-indigo-500" />} label="Family" />
-            <ActionItem icon={<Pill className="text-emerald-500" />} label="Meds" />
+            <ActionItem
+              onClick={() => {
+                setQuickActionMessage("Opening Family Members section in Digital Locker.");
+                navigate('/locker?tab=family');
+              }}
+              icon={<Users className="text-indigo-500" />}
+              label="Family"
+            />
+            <ActionItem onClick={() => navigate('/meds')} icon={<Pill className="text-emerald-500" />} label="Meds" />
           </div>
+          {quickActionMessage && (
+            <p className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">
+              {quickActionMessage}
+            </p>
+          )}
         </section>
 
         {/* Active Status Card */}
@@ -95,40 +275,55 @@ export function HomeScreen() {
               </div>
               <div className="flex items-center gap-1.5 text-gray-600 font-medium">
                 <MapPin className="w-4 h-4 text-teal-600" />
-                <span className="text-xs truncate">Room 204, Downtown Clinic</span>
+                <span className="text-xs truncate">Room 204, {selectedClinic?.name}</span>
               </div>
             </div>
           </div>
         </section>
         
-        {/* Placeholder for more content to show scrolling */}
-        <section className="opacity-70 pointer-events-none">
-          <h3 className="font-bold text-gray-800 mb-3 text-sm mt-4">Recent Reports</h3>
-          <div className="space-y-3">
-            <div className="h-16 bg-white border border-teal-100/50 rounded-xl shadow-sm flex items-center px-4 gap-3">
-              <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
-                <div className="w-5 h-5 bg-teal-200 rounded"></div>
-              </div>
-              <div className="space-y-2 flex-1">
-                <div className="h-3 w-32 bg-gray-200 rounded"></div>
-                <div className="h-2 w-20 bg-gray-100 rounded"></div>
-              </div>
-            </div>
-            <div className="h-16 bg-white border border-teal-100/50 rounded-xl shadow-sm flex items-center px-4 gap-3">
-              <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
-                <div className="w-5 h-5 bg-teal-200 rounded"></div>
-              </div>
-              <div className="space-y-2 flex-1">
-                <div className="h-3 w-24 bg-gray-200 rounded"></div>
-                <div className="h-2 w-16 bg-gray-100 rounded"></div>
-              </div>
-            </div>
+        <section>
+          <div className="flex justify-between items-center mb-3 mt-4">
+            <h3 className="font-bold text-gray-800 text-sm">Recent Reports</h3>
+            <button
+              onClick={() => {
+                setRecentReportMessage("Showing all reports in Digital Locker.");
+                navigate('/locker');
+              }}
+              className="text-xs font-bold text-teal-600 hover:underline"
+            >
+              View All
+            </button>
           </div>
+          <div className="space-y-3">
+            {recentReports.map((report) => (
+              <button
+                key={report.id}
+                onClick={() => {
+                  setRecentReportMessage(`Opening ${report.title} from Recent Reports.`);
+                  navigate('/locker');
+                }}
+                className="w-full h-16 bg-white border border-teal-100 rounded-xl shadow-sm flex items-center px-4 gap-3 hover:border-teal-200 hover:shadow-md transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-teal-500" />
+                </div>
+                <div className="space-y-1 flex-1 text-left">
+                  <p className="text-sm font-bold text-gray-900 line-clamp-1">{report.title}</p>
+                  <p className="text-xs text-gray-500">{report.type} • {report.date}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+          {recentReportMessage && (
+            <p className="mt-3 rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-800">
+              {recentReportMessage}
+            </p>
+          )}
         </section>
       </div>
 
       {/* Bottom Navigation Bar */}
-      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-teal-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex justify-around items-center pt-3 pb-safe-bottom min-h-[64px] z-40">
+      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-teal-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex justify-around items-center pt-3 pb-safe-bottom min-h-[64px] z-40 lg:hidden">
         <NavItem onClick={() => navigate('/')} icon={<Home />} label="Home" active />
         <NavItem onClick={() => navigate('/search')} icon={<Search />} label="Search" />
         <NavItem onClick={() => navigate('/locker')} icon={<BookOpen />} label="Locker" />

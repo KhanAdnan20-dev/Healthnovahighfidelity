@@ -1,10 +1,12 @@
-import { LayoutDashboard, Users, Activity, FileText, Settings, Sparkles, CheckCircle2, Home, Search, User, BookOpen, ArrowLeft, ChevronRight, Clock, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Users, Activity, FileText, Settings, Sparkles, CheckCircle2, Home, Search, User, BookOpen, ArrowLeft, ChevronRight, Clock, AlertCircle, Bell } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useState } from "react";
 
 export function ClinicDashboard() {
   const navigate = useNavigate();
   const [overbookApplied, setOverbookApplied] = useState(false);
+  const [doneTokens, setDoneTokens] = useState<string[]>([]);
+  const [dashboardMessage, setDashboardMessage] = useState<string | null>(null);
 
   const handleApplyOverbookSetting = () => {
     if (overbookApplied) {
@@ -12,6 +14,21 @@ export function ClinicDashboard() {
     }
 
     setOverbookApplied(true);
+  };
+
+  const handleMarkDone = (token: string) => {
+    setDoneTokens((current) => {
+      if (current.includes(token)) {
+        return current;
+      }
+
+      return [...current, token];
+    });
+    setDashboardMessage(`${token} marked as completed.`);
+  };
+
+  const handleQuickAction = (actionLabel: string) => {
+    setDashboardMessage(`${actionLabel} opened. Quick response ready.`);
   };
 
   return (
@@ -31,13 +48,30 @@ export function ClinicDashboard() {
           </div>
         </div>
 
-        {/* Settings Icon */}
-        <button className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 hover:bg-teal-100 transition-colors">
-          <Settings className="w-5 h-5 text-teal-700" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDashboardMessage("Notifications checked. 2 patient alerts updated.")}
+            className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 relative hover:bg-teal-100 transition-colors"
+          >
+            <Bell className="w-5 h-5 text-teal-700" />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-red-500 shadow-sm border border-white"></span>
+          </button>
+          <button
+            onClick={() => setDashboardMessage("Settings panel opened. Preference changes are active.")}
+            className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center border border-teal-100 hover:bg-teal-100 transition-colors"
+          >
+            <Settings className="w-5 h-5 text-teal-700" />
+          </button>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 bg-teal-50/30">
+      {dashboardMessage && (
+        <div className="mx-4 mt-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800">
+          {dashboardMessage}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 pb-24 lg:pb-8 bg-teal-50/30">
         
         {/* Date & Time Info */}
         <section className="flex items-center gap-2 text-xs text-gray-600 font-medium">
@@ -127,10 +161,35 @@ export function ClinicDashboard() {
           </h3>
           
           <div className="space-y-2">
-            <PatientCard token="#11" name="Marcus Webb" reason="General Checkup" />
-            <PatientCard token="#12" name="Elena Rostova" reason="Follow-up: Blood Work" />
-            <PatientCard token="#13" name="David Chen" reason="Migraine Assessment" />
-            <PatientCard token="#14" name="Aria Vance" reason="Sharp Stomach Pain" highlight />
+            <PatientCard
+              token="#11"
+              name="Marcus Webb"
+              reason="General Checkup"
+              isDone={doneTokens.includes("#11")}
+              onMarkDone={() => handleMarkDone("#11")}
+            />
+            <PatientCard
+              token="#12"
+              name="Elena Rostova"
+              reason="Follow-up: Blood Work"
+              isDone={doneTokens.includes("#12")}
+              onMarkDone={() => handleMarkDone("#12")}
+            />
+            <PatientCard
+              token="#13"
+              name="David Chen"
+              reason="Migraine Assessment"
+              isDone={doneTokens.includes("#13")}
+              onMarkDone={() => handleMarkDone("#13")}
+            />
+            <PatientCard
+              token="#14"
+              name="Aria Vance"
+              reason="Sharp Stomach Pain"
+              highlight
+              isDone={doneTokens.includes("#14")}
+              onMarkDone={() => handleMarkDone("#14")}
+            />
           </div>
         </section>
 
@@ -138,15 +197,26 @@ export function ClinicDashboard() {
         <section>
           <h3 className="font-bold text-gray-800 text-sm mb-3">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-2">
-            <QuickActionCard icon={<LayoutDashboard />} label="View Analytics" />
-            <QuickActionCard icon={<FileText />} label="Patient Records" />
+            <QuickActionCard
+              icon={<LayoutDashboard />}
+              label="View Analytics"
+              onClick={() => handleQuickAction("Analytics")}
+            />
+            <QuickActionCard
+              icon={<FileText />}
+              label="Patient Records"
+              onClick={() => {
+                handleQuickAction("Patient Records");
+                navigate('/locker');
+              }}
+            />
           </div>
         </section>
 
       </div>
 
       {/* Bottom Navigation Bar */}
-      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-teal-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex justify-around items-center pt-3 pb-safe-bottom min-h-[64px] z-40">
+      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-teal-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex justify-around items-center pt-3 pb-safe-bottom min-h-[64px] z-40 lg:hidden">
         <NavItem onClick={() => navigate('/')} icon={<Home />} label="Home" />
         <NavItem onClick={() => navigate('/search')} icon={<Search />} label="Search" />
         <NavItem onClick={() => navigate('/locker')} icon={<BookOpen />} label="Locker" />
@@ -173,7 +243,7 @@ function MetricCard({ title, value, trend, trendColor, icon }: { title: string, 
   );
 }
 
-function PatientCard({ token, name, reason, highlight = false }: { token: string, name: string, reason: string, highlight?: boolean }) {
+function PatientCard({ token, name, reason, highlight = false, isDone = false, onMarkDone }: { token: string, name: string, reason: string, highlight?: boolean, isDone?: boolean, onMarkDone?: () => void }) {
   return (
     <div className={`bg-white border ${highlight ? 'border-orange-200 bg-orange-50/30' : 'border-teal-100'} p-4 rounded-2xl shadow-sm hover:shadow-md transition-all`}>
       <div className="flex items-start justify-between mb-3">
@@ -194,23 +264,31 @@ function PatientCard({ token, name, reason, highlight = false }: { token: string
         <p className="text-xs text-gray-600 font-medium">{reason}</p>
       </div>
       
-      <button className="w-full inline-flex items-center justify-center gap-2 bg-white border border-teal-200 hover:bg-teal-50 hover:border-teal-300 text-teal-700 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95">
+      <button
+        onClick={onMarkDone}
+        disabled={isDone}
+        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
+          isDone
+            ? 'bg-emerald-600 border border-emerald-600 text-white cursor-not-allowed'
+            : 'bg-white border border-teal-200 hover:bg-teal-50 hover:border-teal-300 text-teal-700'
+        }`}
+      >
         <CheckCircle2 className="w-4 h-4" />
-        Mark as Done
+        {isDone ? 'Marked as Done' : 'Mark as Done'}
       </button>
     </div>
   );
 }
 
-function QuickActionCard({ icon, label }: { icon: React.ReactNode, label: string }) {
+function QuickActionCard({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick?: () => void }) {
   return (
-    <div className="bg-white border border-teal-100 p-4 rounded-2xl shadow-sm flex items-center gap-3 hover:shadow-md hover:border-teal-200 transition-all cursor-pointer group">
+    <button onClick={onClick} className="w-full bg-white border border-teal-100 p-4 rounded-2xl shadow-sm flex items-center gap-3 hover:shadow-md hover:border-teal-200 transition-all cursor-pointer group">
       <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center border border-teal-100 text-teal-600 group-hover:bg-teal-100 transition-colors">
         {icon}
       </div>
       <span className="text-xs font-bold text-gray-900 flex-1">{label}</span>
       <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-teal-600 transition-colors" />
-    </div>
+    </button>
   );
 }
 
