@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, Pill, Search, Plus, CheckCircle2, AlertTriangle, Clock3 } from "lucide-react";
+import { ChevronLeft, Pill, Search, Plus, CheckCircle2, AlertTriangle, Clock3, ShoppingCart, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router";
 
 type TimeSlot = "morning" | "afternoon" | "night";
@@ -13,6 +13,16 @@ type Medication = {
   refillDate: string;
   takenToday: boolean;
   notes: string;
+};
+
+type MedicineToBuy = {
+  id: string;
+  name: string;
+  dosage: string;
+  quantity: number;
+  reason: "out-of-stock" | "required" | "new";
+  addedDate: string;
+  price?: number;
 };
 
 const initialMeds: Medication[] = [
@@ -61,12 +71,19 @@ const initialMeds: Medication[] = [
 export function MedsScreen() {
   const navigate = useNavigate();
   const [medications, setMedications] = useState<Medication[]>(initialMeds);
+  const [medicinesToBuy, setMedicinesToBuy] = useState<MedicineToBuy[]>([]);
   const [query, setQuery] = useState("");
   const [activeSlot, setActiveSlot] = useState<"all" | TimeSlot>("all");
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDose, setNewDose] = useState("");
   const [newSlot, setNewSlot] = useState<TimeSlot>("morning");
+  const [showBuyDialog, setShowBuyDialog] = useState(false);
+  const [buyMedicineName, setBuyMedicineName] = useState("");
+  const [buyMedicineDose, setBuyMedicineDose] = useState("");
+  const [buyMedicineQty, setBuyMedicineQty] = useState("1");
+  const [buyReason, setBuyReason] = useState<"out-of-stock" | "required" | "new">("required");
+  const [showBuyCart, setShowBuyCart] = useState(false);
 
   const visibleMeds = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -137,6 +154,36 @@ export function MedsScreen() {
     setNewDose("");
     setNewSlot("morning");
     setShowAddForm(false);
+  };
+
+  const addMedicineToBuy = () => {
+    const cleanName = buyMedicineName.trim();
+    const cleanDose = buyMedicineDose.trim();
+    const qty = parseInt(buyMedicineQty, 10);
+
+    if (!cleanName || !cleanDose || qty <= 0) {
+      return;
+    }
+
+    const newMedicineToBuy: MedicineToBuy = {
+      id: `buy-${Date.now()}`,
+      name: cleanName,
+      dosage: cleanDose,
+      quantity: qty,
+      reason: buyReason,
+      addedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+
+    setMedicinesToBuy((current) => [newMedicineToBuy, ...current]);
+    setBuyMedicineName("");
+    setBuyMedicineDose("");
+    setBuyMedicineQty("1");
+    setBuyReason("required");
+    setShowBuyDialog(false);
+  };
+
+  const removeMedicineToBuy = (id: string) => {
+    setMedicinesToBuy((current) => current.filter((med) => med.id !== id));
   };
 
   return (
@@ -238,7 +285,118 @@ export function MedsScreen() {
             </div>
           )}
         </section>
+        {/* Buy Medicines Section */}
+        <section className="bg-white border border-amber-100 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-amber-600" />
+              <h2 className="text-sm font-bold text-gray-900">Buy Medicines</h2>
+            </div>
+            {medicinesToBuy.length > 0 && (
+              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
+                {medicinesToBuy.length} item{medicinesToBuy.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
 
+          <button
+            onClick={() => setShowBuyDialog((current) => !current)}
+            className="w-full rounded-xl border border-dashed border-amber-300 bg-amber-50/60 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100/70"
+          >
+            {showBuyDialog ? "Close" : "Add Medicine to Shopping List"}
+          </button>
+
+          {showBuyDialog && (
+            <div className="rounded-xl border border-amber-100 p-3 bg-white space-y-2">
+              <input
+                value={buyMedicineName}
+                onChange={(event) => setBuyMedicineName(event.target.value)}
+                placeholder="Medicine name (e.g., Aspirin)"
+                className="w-full rounded-lg border border-amber-100 px-3 py-2 text-sm outline-none focus:border-amber-300"
+              />
+              <input
+                value={buyMedicineDose}
+                onChange={(event) => setBuyMedicineDose(event.target.value)}
+                placeholder="Dosage (e.g., 500 mg)"
+                className="w-full rounded-lg border border-amber-100 px-3 py-2 text-sm outline-none focus:border-amber-300"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={buyMedicineQty}
+                  onChange={(event) => setBuyMedicineQty(event.target.value)}
+                  type="number"
+                  min="1"
+                  placeholder="Quantity"
+                  className="rounded-lg border border-amber-100 px-3 py-2 text-sm outline-none focus:border-amber-300"
+                />
+                <select
+                  value={buyReason}
+                  onChange={(event) => setBuyReason(event.target.value as any)}
+                  className="rounded-lg border border-amber-100 px-3 py-2 text-sm outline-none focus:border-amber-300"
+                >
+                  <option value="required">Required</option>
+                  <option value="out-of-stock">Out of Stock</option>
+                  <option value="new">New Medicine</option>
+                </select>
+              </div>
+              <button
+                onClick={addMedicineToBuy}
+                className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700"
+              >
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <Plus className="w-4 h-4" />
+                  Add to Cart
+                </span>
+              </button>
+            </div>
+          )}
+
+          {medicinesToBuy.length > 0 && (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {medicinesToBuy.map((med) => (
+                <div key={med.id} className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-100">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-gray-900">{med.name}</p>
+                      <span className="text-[9px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                        {med.dosage}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      <span className="text-[10px] font-semibold text-gray-600">Qty: {med.quantity}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        med.reason === "out-of-stock" ? "bg-red-100 text-red-700" :
+                        med.reason === "required" ? "bg-blue-100 text-blue-700" :
+                        "bg-green-100 text-green-700"
+                      }`}>
+                        {med.reason === "out-of-stock" ? "Out of Stock" : 
+                         med.reason === "required" ? "Required" : "New"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeMedicineToBuy(med.id)}
+                    className="ml-2 p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setShowBuyCart(!showBuyCart)}
+                className="w-full rounded-lg bg-amber-600 text-white py-2 text-sm font-bold hover:bg-amber-700 mt-2"
+              >
+                {showBuyCart ? "Hide" : "View Shopping Cart"}
+              </button>
+            </div>
+          )}
+
+          {medicinesToBuy.length === 0 && (
+            <p className="text-xs text-gray-500 text-center py-4">
+              No medicines in shopping list. Add medicines you need to buy.
+            </p>
+          )}
+        </section>
         <section className="space-y-3">
           {visibleMeds.map((med) => (
             <article key={med.id} className="bg-white border border-teal-100 rounded-2xl p-4 shadow-sm">
