@@ -1,0 +1,25 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+header {
+  background-color: #2c7be5;
+  color: #fff;
+  padding: 16px 24px;
+}
+
+header h1 {
+  font-size: 1.5rem;
+}
+
+main {
+  padding: 24px;
+}
